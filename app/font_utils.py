@@ -4,16 +4,26 @@ def get_fallback_font(original_font):
     """
     Get appropriate fallback font based on original font characteristics
     """
+    # Try to preserve exact font name if it matches pattern
+    if any(std in original_font for std in ['Times', 'Helvetica', 'Courier']):
+        return original_font
+        
     if original_font in Config.STANDARD_FONTS:
         return original_font
         
-    # Basic font substitution logic
+    # More specific font matching
     if 'Bold' in original_font and 'Italic' in original_font:
-        return 'Times-BoldItalic'
+        if 'Times' in original_font:
+            return 'Times-BoldItalic'
+        return 'Helvetica-BoldOblique'
     elif 'Bold' in original_font:
-        return 'Times-Bold'
+        if 'Times' in original_font:
+            return 'Times-Bold'
+        return 'Helvetica-Bold'
     elif 'Italic' in original_font or 'Oblique' in original_font:
-        return 'Times-Italic'
+        if 'Times' in original_font:
+            return 'Times-Italic'
+        return 'Helvetica-Oblique'
         
     return Config.DEFAULT_FONT
 

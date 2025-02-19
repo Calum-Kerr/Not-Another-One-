@@ -110,11 +110,11 @@ function attachFormHandlers() {
                 if (!changes[page]) changes[page] = [];
                 
                 changes[page].push({
-                    bbox: JSON.parse(input.dataset.bbox),
+                    bbox: JSON.parse(input.dataset.bbox.replace(/'/g, '"')),
                     new_text: input.value,
                     font: input.dataset.font,
                     size: parseFloat(input.dataset.size),
-                    color: JSON.parse(input.dataset.color)
+                    color: JSON.parse(input.dataset.color.replace(/'/g, '"'))
                 });
             }
         });
@@ -127,18 +127,31 @@ function attachFormHandlers() {
         try {
             const response = await fetch('/edit', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ filename, changes })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: filename,
+                    changes: changes
+                })
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
             const data = await response.json();
             if (data.success) {
                 alert('Changes saved successfully!');
                 window.editedFile = data.edited_file;
                 downloadBtn.disabled = false;
+            } else {
+                throw new Error(data.error || 'Failed to save changes');
             }
         } catch (error) {
-            alert('Failed to save changes: ' + error);
+            console.error('Error:', error);
+            alert('Failed to save changes: ' + error.message);
         }
     };
     
