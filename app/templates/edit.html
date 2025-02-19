@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="editor-container">
+    <div class="row">
+        <div class="col-12">
+            <form id="editForm">
+                {% for page_num, blocks in pages.items() %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Page {{ page_num + 1 }}
+                    </div>
+                    <div class="card-body">
+                        {% for block in blocks %}
+                        <div class="mb-3 text-block" data-page="{{ page_num }}" data-index="{{ loop.index0 }}">
+                            <input type="text" 
+                                class="form-control"
+                                value="{{ block.text }}"
+                                data-original="{{ block.text }}"
+                                data-bbox="{{ block.bbox }}"
+                                data-font="{{ block.font }}"
+                                data-size="{{ block.size }}"
+                                data-color="{{ block.color }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn btn-secondary" id="downloadBtn">Download PDF</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('editForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const changes = {};
+    
+    document.querySelectorAll('.text-block input').forEach(input => {
+        if (input.value !== input.dataset.original) {
+            const page = input.parentElement.dataset.page;
+            if (!changes[page]) changes[page] = [];
+            
+            changes[page].push({
+                bbox: JSON.parse(input.dataset.bbox),
+                new_text: input.value,
+                font: input.dataset.font,
+                size: parseFloat(input.dataset.size),
+                color: JSON.parse(input.dataset.color)
+            });
+        }
+    });
+    
+    try {
+        const response = await fetch('/edit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                filename: '{{ filename }}',
+                changes: changes
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Changes saved successfully!');
+            window.editedFile = data.edited_file;
+        }
+    } catch (error) {
+        alert('Failed to save changes: ' + error);
+    }
+};
+
+document.getElementById('downloadBtn').onclick = () => {
+    if (window.editedFile) {
+        window.location.href = `/download/${window.editedFile}`;
+    } else {
+        alert('Please save changes first');
+    }
+};
+</script>
+{% endblock %}

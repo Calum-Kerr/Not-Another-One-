@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                Upload PDF
+            </div>
+            <div class="card-body">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="pdfFile" class="form-label">Select PDF file</label>
+                        <input type="file" class="form-control" id="pdfFile" name="file" accept=".pdf" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload & Process</button>
+                </form>
+            </div>
+        </div>
+        
+        <div id="editContainer" class="mt-4 d-none">
+            <!-- Text editor will be dynamically inserted here -->
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        const editContainer = document.getElementById('editContainer');
+        
+        if (data.status === 'success' || data.status === 'warning') {
+            // Show message if any
+            let messageHtml = '';
+            if (data.message) {
+                messageHtml = `
+                    <div class="alert alert-${data.status === 'success' ? 'success' : 'warning'} alert-dismissible fade show">
+                        ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+            }
+            
+            // Create editor HTML
+            const editorHtml = `
+                ${messageHtml}
+                <form id="editForm" data-filename="${data.filename}">
+                    ${Object.entries(data.pages).map(([pageNum, blocks], pageIndex) => `
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                Page ${parseInt(pageNum) + 1}
+                            </div>
+                            <div class="card-body">
+                                ${blocks.map((block, blockIndex) => `
+                                    <div class="mb-3 text-block" data-page="${pageNum}" data-index="${blockIndex}">
+                                        <input type="text"
+                                            class="form-control"
+                                            value="${block.text}"
+                                            data-original="${block.text}"
+                                            data-bbox='${JSON.stringify(block.bbox)}'
+                                            data-font="${block.font}"
+                                            data-size="${block.size}"
+                                            data-color='${JSON.stringify(block.color)}'>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="button" class="btn btn-secondary" id="downloadBtn" disabled>Download PDF</button>
+                    </div>
+                </form>
+            `;
+            
+            editContainer.classList.remove('d-none');
+            editContainer.innerHTML = editorHtml;
+            
+            // Attach event handlers to the new form
+            attachFormHandlers();
+        } else {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+function attachFormHandlers() {
+    const editForm = document.getElementById('editForm');
+    const downloadBtn = document.getElementById('downloadBtn');
+    
+    editForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const changes = {};
+        const filename = editForm.dataset.filename;
+        
+        document.querySelectorAll('.text-block input').forEach(input => {
+            if (input.value !== input.dataset.original) {
+                const page = input.parentElement.dataset.page;
+                if (!changes[page]) changes[page] = [];
+                
+                changes[page].push({
+                    bbox: JSON.parse(input.dataset.bbox),
+                    new_text: input.value,
+                    font: input.dataset.font,
+                    size: parseFloat(input.dataset.size),
+                    color: JSON.parse(input.dataset.color)
+                });
+            }
+        });
+        
+        if (Object.keys(changes).length === 0) {
+            alert('No changes detected');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/edit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ filename, changes })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert('Changes saved successfully!');
+                window.editedFile = data.edited_file;
+                downloadBtn.disabled = false;
+            }
+        } catch (error) {
+            alert('Failed to save changes: ' + error);
+        }
+    };
+    
+    downloadBtn.onclick = () => {
+        if (window.editedFile) {
+            window.location.href = `/download/${window.editedFile}`;
+        }
+    };
+}
+</script>
+{% endblock %}
