@@ -4,8 +4,24 @@ from werkzeug.utils import secure_filename
 from app.pdf_utils import PDFHandler
 from app.ocr_processing import OCRProcessor
 from app.config import Config
+from app.file_cleanup import FileCleanup
+from datetime import datetime, timedelta
 
 bp = Blueprint('main', __name__)
+
+# Add this function to handle file cleanup
+def cleanup_old_files():
+    now = datetime.now()
+    retention_period = Config.FILE_RETENTION_PERIOD.total_seconds()
+    
+    for filename in os.listdir(Config.UPLOAD_FOLDER):
+        file_path = os.path.join(Config.UPLOAD_FOLDER, filename)
+        file_modified = os.path.getmtime(file_path)
+        if (now - datetime.fromtimestamp(file_modified)).total_seconds() > retention_period:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
 
 @bp.route('/', methods=['GET'])
 def index():
@@ -26,14 +42,8 @@ def upload_file():
             filepath = os.path.join(Config.UPLOAD_FOLDER, filename)
             file.save(filepath)
             
-            # Check dependencies first
-            if not OCRProcessor.check_dependencies():
-                return jsonify({
-                    'status': 'warning',
-                    'message': 'Dependencies missing. Processing without OCR.',
-                    'filename': filename,
-                    'pages': PDFHandler.extract_text_with_attributes(filepath)
-                })
+            # Start countdown in terminal
+            FileCleanup.start_countdown_thread(2)  # 2 minutes countdown
             
             # Process with OCR
             ocr_path = OCRProcessor.process_pdf(filepath)
@@ -41,7 +51,6 @@ def upload_file():
             
             return jsonify({
                 'status': 'success',
-                'message': 'File processed successfully with OCR',
                 'filename': filename,
                 'pages': pages_data
             })
@@ -56,11 +65,23 @@ def upload_file():
 
 @bp.route('/edit', methods=['POST'])
 def edit_pdf():
+    cleanup_old_files()  # Call cleanup before processing edit
+    
+    # Check if file is too old
     data = request.json
     filename = data['filename']
-    changes = data['changes']
-    
     filepath = os.path.join(Config.UPLOAD_FOLDER, secure_filename(filename))
+    
+    if os.path.exists(filepath):
+        modified_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+        if datetime.now() - modified_time > Config.FILE_RETENTION_PERIOD:
+            try:
+                os.remove(filepath)
+            except:
+                pass
+            return jsonify({'error': 'File has expired'}), 410
+    
+    changes = data['changes']
     
     # Apply changes and save
     doc = PDFHandler.update_text(filepath, changes)
@@ -70,6 +91,37 @@ def edit_pdf():
     return jsonify({'success': True, 'edited_file': f"edited_{filename}"})
 
 @bp.route('/download/<filename>')
-def download(filename):
-    filepath = os.path.join(Config.UPLOAD_FOLDER, secure_filename(filename))
-    return send_file(filepath, as_attachment=True)
+def download_file(filename):
+    """Single download route that handles both normal and marked files"""
+    try:
+        filepath = os.path.join(Config.UPLOAD_FOLDER, secure_filename(filename))
+        
+        # Check if the regular file exists
+        if os.path.exists(filepath):
+            return send_file(
+                filepath,
+                as_attachment=True,
+                download_name=filename
+            )
+            
+        # Check if a marked version exists
+        marked_filepath = f"{filepath}.marked"
+        if os.path.exists(marked_filepath):
+            return send_file(
+                marked_filepath,
+                as_attachment=True,
+                download_name=filename
+            )
+            
+        return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/cleanup', methods=['POST'])
+def trigger_cleanup():
+    """Endpoint to trigger forced cleanup"""
+    try:
+        FileCleanup.force_cleanup()
+        return jsonify({'success': True, 'message': 'All files cleaned up'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

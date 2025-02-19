@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="bullet-point-warning">
+    <div class="alert alert-warning mb-0">
+        <strong>⚠️ Note:</strong> Avoid editing bullet point (•) lines
+    </div>
+</div>
+
+<!-- Add countdown timer div -->
+<div id="countdownTimer" class="countdown-warning d-none">
+    <div class="alert alert-danger mb-0">
+        <strong>⚠️ Warning:</strong> File will be deleted in <span id="countdown">2:00</span>
+    </div>
+</div>
+
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card">
@@ -25,6 +38,37 @@
 </div>
 
 <style>
+.bullet-point-warning, .countdown-warning {
+    position: fixed;
+    top: 70px;
+    max-width: 250px;
+    z-index: 1000;
+}
+
+.bullet-point-warning {
+    left: 20px;
+}
+
+.countdown-warning {
+    right: 20px;
+}
+
+.bullet-point-warning .alert,
+.countdown-warning .alert {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    border-left: 4px solid;
+}
+
+.bullet-point-warning .alert {
+    border-left-color: #ffc107;
+}
+
+.countdown-warning .alert {
+    border-left-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
 .bottom-toolbar {
     position: fixed;
     bottom: 0;
@@ -39,9 +83,77 @@
 .content-wrapper {
     padding-bottom: 80px; /* Add space for fixed toolbar */
 }
+
+#countdown {
+    font-weight: bold;
+    font-family: monospace;
+}
 </style>
 
 <script>
+let countdownInterval;
+const TIMEOUT_MINUTES = 2; // Changed to 2 minutes
+
+// Store expiry time in localStorage
+function setExpiryTime() {
+    const expiryTime = Date.now() + (TIMEOUT_MINUTES * 60 * 1000);
+    localStorage.setItem('pdfExpiryTime', expiryTime.toString());
+    return expiryTime;
+}
+
+function getExpiryTime() {
+    return parseInt(localStorage.getItem('pdfExpiryTime') || '0');
+}
+
+function triggerFinalCleanup() {
+    try {
+        // Trigger cleanup immediately instead of waiting
+        fetch('/cleanup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    } catch (error) {
+        console.error('Cleanup error:', error);
+    }
+}
+
+function startCountdown(timestamp) {
+    const countdownDiv = document.getElementById('countdownTimer');
+    const countdownSpan = document.getElementById('countdown');
+    countdownDiv.classList.remove('d-none');
+    
+    clearInterval(countdownInterval);
+    
+    countdownInterval = setInterval(() => {
+        const now = Date.now();
+        const timeLeft = timestamp - now;
+        
+        if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            localStorage.removeItem('pdfExpiryTime');
+            triggerFinalCleanup();  // Call cleanup first
+            alert('Session expired. Files have been deleted.');
+            window.location.href = '/';
+            return;
+        }
+        
+        const minutes = Math.floor(timeLeft / 60000);
+        const seconds = Math.floor((timeLeft % 60000) / 1000);
+        countdownSpan.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+// Check for existing timer on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const expiryTime = getExpiryTime();
+    if (expiryTime > Date.now()) {
+        startCountdown(expiryTime);
+    }
+});
+
+// Modify the existing upload handler
 document.getElementById('uploadForm').onsubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -56,6 +168,10 @@ document.getElementById('uploadForm').onsubmit = async (e) => {
         const editContainer = document.getElementById('editContainer');
         
         if (data.status === 'success' || data.status === 'warning') {
+            // Set new expiry time
+            const expiryTime = setExpiryTime();
+            startCountdown(expiryTime);
+            
             // Show message if any
             let messageHtml = '';
             if (data.message) {
@@ -120,6 +236,11 @@ document.getElementById('uploadForm').onsubmit = async (e) => {
     }
 };
 
+// Add cleanup on page unload
+window.onbeforeunload = () => {
+    clearInterval(countdownInterval);
+};
+
 function attachFormHandlers() {
     const editForm = document.getElementById('editForm');
     const downloadBtn = document.getElementById('downloadBtn');
@@ -182,9 +303,32 @@ function attachFormHandlers() {
     
     downloadBtn.onclick = () => {
         if (window.editedFile) {
-            window.location.href = `/download/${window.editedFile}`;
+            // Create download form and submit it
+            const form = document.createElement('form');
+            form.method = 'GET';
+            form.action = `/download/${window.editedFile}`;
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        } else {
+            alert('Please save changes first');
         }
     };
 }
+
+// Handle visibility change
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        const expiryTime = getExpiryTime();
+        if (expiryTime > Date.now()) {
+            startCountdown(expiryTime);
+        } else if (expiryTime > 0) {
+            // If timer has expired while away
+            localStorage.removeItem('pdfExpiryTime');
+            alert('Session expired while you were away. File has been deleted.');
+            window.location.href = '/';
+        }
+    }
+});
 </script>
 {% endblock %}
