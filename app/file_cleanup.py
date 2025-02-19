@@ -6,33 +6,62 @@ from app.config import Config
 
 class FileCleanup:
     _cleanup_thread = None
+    _active_sessions = {}  # Track active file sessions and their expiry times
 
     @classmethod
-    def start_countdown_thread(cls, initial_time):
-        """Start a thread to show countdown in terminal"""
+    def start_countdown_thread(cls, initial_time, filename):
+        """Start or update countdown for a specific file"""
+        now = datetime.now()
+        expiry_time = now + timedelta(minutes=initial_time)
+        cls._active_sessions[filename] = expiry_time
+
         def countdown():
-            end_time = datetime.now() + timedelta(minutes=initial_time)
-            
-            while datetime.now() < end_time:
-                remaining = end_time - datetime.now()
+            while True:
+                now = datetime.now()
+                # Get earliest expiry time
+                if not cls._active_sessions:
+                    break
+
+                # Show time until next file expires
+                earliest_expiry = min(cls._active_sessions.values())
+                remaining = earliest_expiry - now
+                
+                if remaining.total_seconds() <= 0:
+                    # Remove expired sessions
+                    expired = [f for f, t in cls._active_sessions.items() if t <= now]
+                    for f in expired:
+                        del cls._active_sessions[f]
+                        try:
+                            filepath = os.path.join(Config.UPLOAD_FOLDER, f)
+                            if os.path.exists(filepath):
+                                os.remove(filepath)
+                                print(f"\nRemoved expired file: {f}")
+                        except Exception as e:
+                            print(f"\nError removing file {f}: {str(e)}")
+                
+                if not cls._active_sessions:
+                    break
+
                 minutes = int(remaining.total_seconds() // 60)
                 seconds = int(remaining.total_seconds() % 60)
-                print(f"\rTime until cleanup: {minutes:02d}:{seconds:02d}", end='', flush=True)
-                time.sleep(5)  # Update every 5 seconds
-                
-            print("\nCleaning up files...")
-            cls.force_cleanup()
+                print(f"\rActive sessions: {len(cls._active_sessions)} - Next cleanup in: {minutes:02d}:{seconds:02d}", end='', flush=True)
+                time.sleep(1)
 
-        if cls._cleanup_thread and cls._cleanup_thread.is_alive():
-            return  # Don't start new thread if one is running
-            
-        cls._cleanup_thread = threading.Thread(target=countdown)
-        cls._cleanup_thread.daemon = True
-        cls._cleanup_thread.start()
+        # Start new thread if not running
+        if not cls._cleanup_thread or not cls._cleanup_thread.is_alive():
+            cls._cleanup_thread = threading.Thread(target=countdown)
+            cls._cleanup_thread.daemon = True
+            cls._cleanup_thread.start()
 
-    @staticmethod
-    def cleanup_old_files():
-        """Remove files that have exceeded retention period"""
+    @classmethod
+    def remove_session(cls, filename):
+        """Remove a file session when done"""
+        if filename in cls._active_sessions:
+            del cls._active_sessions[filename]
+
+    @classmethod
+    def force_cleanup(cls):
+        """Force cleanup while respecting active sessions"""
         now = datetime.now()
         upload_dir = Config.UPLOAD_FOLDER
         
@@ -40,29 +69,11 @@ class FileCleanup:
             return
             
         for filename in os.listdir(upload_dir):
-            filepath = os.path.join(upload_dir, filename)
-            try:
-                file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
-                age = now - file_time
-                
-                if age > Config.FILE_RETENTION_PERIOD:
+            # Don't delete files that have active sessions
+            if filename not in cls._active_sessions:
+                try:
+                    filepath = os.path.join(upload_dir, filename)
                     os.remove(filepath)
-                    print(f"\nRemoved file: {filename}")
-            except Exception as e:
-                print(f"\nError processing file {filename}: {str(e)}")
-
-    @staticmethod
-    def force_cleanup():
-        """Force remove all files"""
-        upload_dir = Config.UPLOAD_FOLDER
-        
-        if not os.path.exists(upload_dir):
-            return
-            
-        for filename in os.listdir(upload_dir):
-            try:
-                filepath = os.path.join(upload_dir, filename)
-                os.remove(filepath)
-                print(f"\nForce removed: {filename}")
-            except Exception as e:
-                print(f"\nError removing file {filename}: {str(e)}")
+                    print(f"\nForce removed inactive file: {filename}")
+                except Exception as e:
+                    print(f"\nError removing file {filename}: {str(e)}")

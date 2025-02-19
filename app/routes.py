@@ -42,8 +42,8 @@ def upload_file():
             filepath = os.path.join(Config.UPLOAD_FOLDER, filename)
             file.save(filepath)
             
-            # Start countdown in terminal
-            FileCleanup.start_countdown_thread(2)  # 2 minutes countdown
+            # Start/update countdown for this specific file
+            FileCleanup.start_countdown_thread(2, filename)
             
             # Process with OCR
             ocr_path = OCRProcessor.process_pdf(filepath)
@@ -98,6 +98,8 @@ def download_file(filename):
         
         # Check if the regular file exists
         if os.path.exists(filepath):
+            # Update session timer when file is downloaded
+            FileCleanup.start_countdown_thread(2, filename)
             return send_file(
                 filepath,
                 as_attachment=True,
