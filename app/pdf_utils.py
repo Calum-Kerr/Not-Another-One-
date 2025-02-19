@@ -59,7 +59,7 @@ class PDFHandler:
             for change in page_changes:
                 x0, y0, x1, y1 = change['bbox']
                 
-                # Calculate text dimensions
+                # Calculate font and style
                 font = 'helv'
                 if 'Times' in change['font']:
                     font = 'tiro'
@@ -78,23 +78,24 @@ class PDFHandler:
                     change['size']
                 )
                 
-                # Calculate white rectangle dimensions
+                # Calculate precise white rectangle dimensions
                 text_height = change['size'] * 1
                 y_middle = (y0 + y1) / 2
                 rect_y0 = y_middle - (text_height / 2) + 0.5
                 rect_y1 = y_middle + (text_height / 2) + 0.5
                 
-                # Set exact width based on text
-                rect_x0 = x0
-                rect_x1 = x0 + text_width
+                # Increase right offset for both rectangle and text
+                x_offset = 1.0  # Increased from 0.2 to 1.0
+                rect_x0 = x0 + x_offset
+                rect_x1 = rect_x0 + text_width - (x_offset * 0.4)  # Reduced compensation
                 
                 # Create precise white rectangle
                 page.draw_rect([rect_x0, rect_y0, rect_x1, rect_y1], 
                              color=(1, 1, 1), 
                              fill=(1, 1, 1))
                 
-                # Adjust text position
-                text_x = x0
+                # Position text at same offset
+                text_x = rect_x0
                 text_y = y1 - (change['size'] * 0.1)
                 
                 try:
