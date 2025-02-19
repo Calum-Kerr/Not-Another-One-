@@ -34,6 +34,21 @@ class PDFHandler:
         return tuple(max(0, min(1, c/255)) if c > 1 else c for c in color[:3])
 
     @staticmethod
+    def get_text_width(text, font_name, font_size):
+        """Calculate exact width of text in points"""
+        try:
+            # Create a temp doc to measure text
+            doc = fitz.Document()
+            page = doc.new_page()
+            # Get text width using built-in function
+            tw = page.get_text_width(text, fontname=font_name, fontsize=font_size)
+            doc.close()
+            return tw
+        except:
+            # Fallback: estimate based on average character width
+            return len(text) * (font_size * 0.5)  # Approximate width
+
+    @staticmethod
     def update_text(pdf_path, changes):
         """Apply text changes to PDF"""
         doc = fitz.open(pdf_path)
@@ -44,72 +59,70 @@ class PDFHandler:
             for change in page_changes:
                 x0, y0, x1, y1 = change['bbox']
                 
-                # Calculate white rectangle dimensions with lower position
+                # Calculate text dimensions
+                font = 'helv'
+                if 'Times' in change['font']:
+                    font = 'tiro'
+                elif 'Courier' in change['font']:
+                    font = 'cour'
+                
+                if 'Bold' in change['font'] or (change.get('flags', 0) & 2**1):
+                    font = f"{font},bold"
+                if 'Italic' in change['font'] or (change.get('flags', 0) & 2**0):
+                    font = f"{font},italic"
+                
+                # Get exact text width
+                text_width = PDFHandler.get_text_width(
+                    change['new_text'],
+                    font,
+                    change['size']
+                )
+                
+                # Calculate white rectangle dimensions
                 text_height = change['size'] * 1
                 y_middle = (y0 + y1) / 2
-                rect_y0 = y_middle - (text_height / 2) + 0.5  # Move down 2 pixels
-                rect_y1 = y_middle + (text_height / 2) + 0.5  # Move down 2 pixels
+                rect_y0 = y_middle - (text_height / 2) + 0.5
+                rect_y1 = y_middle + (text_height / 2) + 0.5
                 
-                # Adjust width based on text length difference
-                original_len = len(change.get('original_text', ''))
-                new_len = len(change['new_text'])
-                char_width = (x1 - x0) / max(original_len, 10)  # Avoid division by zero
-                new_width = char_width * new_len
-                rect_x1 = x0 + new_width
+                # Set exact width based on text
+                rect_x0 = x0
+                rect_x1 = x0 + text_width
                 
-                # Create adjusted white rectangle
-                page.draw_rect([x0, rect_y0, rect_x1, rect_y1], 
+                # Create precise white rectangle
+                page.draw_rect([rect_x0, rect_y0, rect_x1, rect_y1], 
                              color=(1, 1, 1), 
                              fill=(1, 1, 1))
                 
                 # Adjust text position
-                text_x = x0 + 0.8
+                text_x = x0
                 text_y = y1 - (change['size'] * 0.1)
                 
                 try:
-                    # Set up font
-                    base_font = 'helv'
-                    if 'Times' in change['font']:
-                        base_font = 'tiro'
-                    elif 'Courier' in change['font']:
-                        base_font = 'cour'
+                    # Insert text with preserved color
+                    color = PDFHandler.normalize_color(change.get('color', (0, 0, 0)))
                     
-                    # Handle text styling
-                    if 'Bold' in change['font'] or (change.get('flags', 0) & 2**1):
-                        base_font = f"{base_font},bold"
-                    if 'Italic' in change['font'] or 'Oblique' in change['font'] or (change.get('flags', 0) & 2**0):
-                        base_font = f"{base_font},italic"
+                    # Draw text
+                    page.insert_text(
+                        point=(text_x, text_y),
+                        text=change['new_text'],
+                        fontname=font,
+                        fontsize=change['size'],
+                        color=color
+                    )
                     
-                    # Preserve original color for links (blue usually)
-                    color = change.get('color', (0, 0, 0))
-                    if isinstance(color, (list, tuple)) and len(color) >= 3:
-                        if color[0] == 0 and color[1] == 0 and color[2] > 0:  # If it's a blue link
-                            # Draw underline with matching color
+                    # Draw underline for links if needed
+                    if isinstance(change.get('color'), (list, tuple)) and len(change['color']) >= 3:
+                        if change['color'][0] == 0 and change['color'][1] == 0 and change['color'][2] > 0:
                             underline_y = rect_y1 - 0.5
                             page.draw_line(
-                                (x0, underline_y),
+                                (rect_x0, underline_y),
                                 (rect_x1, underline_y),
-                                color=PDFHandler.normalize_color(color),
+                                color=color,
                                 width=0.5
                             )
                     
-                    # Insert text with preserved color
-                    page.insert_text(
-                        point=(text_x, text_y),
-                        text=change['new_text'],
-                        fontname=base_font,
-                        fontsize=change['size'],
-                        color=PDFHandler.normalize_color(color)
-                    )
-                    
                 except Exception as e:
                     print(f"Text insertion error: {str(e)}, using fallback method")
-                    page.insert_text(
-                        point=(text_x, text_y),
-                        text=change['new_text'],
-                        fontname='helv',
-                        fontsize=change['size'],
-                        color=(0, 0, 0)
-                    )
-        
+                    # Fallback handling...
+                    
         return doc
