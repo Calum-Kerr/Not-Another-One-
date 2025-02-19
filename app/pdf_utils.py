@@ -35,18 +35,23 @@ class PDFHandler:
             page = doc[int(page_num)]
             
             for change in page_changes:
-                # Create redaction annotation
-                page.add_redact_annot(change['bbox'])
-                page.apply_redactions()
+                # Get the coordinates from bbox
+                x0, y0, x1, y1 = change['bbox']
                 
-                # Insert new text
+                # Create white rectangle to cover old text
+                page.draw_rect([x0, y0, x1, y1], color=(1, 1, 1), fill=(1, 1, 1))
+                
+                # Calculate text position (use bottom-left corner for text insertion)
                 font = get_fallback_font(change['font'])
-                page.insert_textbox(
-                    change['bbox'],
-                    change['new_text'],
+                fontsize = change['size']
+                
+                # Insert text at exact position
+                page.insert_text(
+                    point=(x0, y1),  # bottom-left corner
+                    text=change['new_text'],
                     fontname=font,
-                    fontsize=change['size'],
-                    color=change.get('color', (0, 0, 0))
+                    fontsize=fontsize,
+                    color=change.get('color', (0, 0, 0)),
                 )
         
         return doc
