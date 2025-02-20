@@ -97,11 +97,11 @@ class PDFHandler:
                 # Calculate precise white rectangle dimensions with adjusted position
                 text_height = change['size'] * 1
                 y_middle = (y0 + y1) / 2
-                rect_y0 = y_middle - (text_height / 2) + 0.5 - 1  # Move up 1 pixel
-                rect_y1 = y_middle + (text_height / 2) + 0.5 - 1  # Move up 1 pixel
+                rect_y0 = y_middle - (text_height / 2) + 1  # Move down 0.5 pixel
+                rect_y1 = y_middle + (text_height / 2) + 1  # Move down 0.5 pixel
                 
-                # Adjust x position (move left 1 pixel)
-                x_offset = -1  # Reduced from 1.0 to 0.0 to move left
+                # Adjust x position (move right 0.5 pixel)
+                x_offset = -0.5  # Changed from -1 to -0.5 to move right
                 rect_x0 = x0 + x_offset
                 rect_x1 = rect_x0 + text_width
                 
@@ -112,7 +112,7 @@ class PDFHandler:
                 
                 # Position text with same adjustments
                 text_x = rect_x0
-                text_y = y1 - (change['size'] * 0.1) - 0.5  # Move up 1 pixel
+                text_y = y1 - (change['size'] * 0.1) + 0  # Adjust for new position
                 
                 try:
                     # Insert text with preserved color
