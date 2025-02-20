@@ -42,20 +42,36 @@ def upload_file():
             filepath = os.path.join(Config.UPLOAD_FOLDER, filename)
             file.save(filepath)
             
-            # Start/update countdown for this specific file
+            # Start countdown thread
             FileCleanup.start_countdown_thread(2, filename)
             
-            # Process with OCR
-            ocr_path = OCRProcessor.process_pdf(filepath)
-            pages_data = PDFHandler.extract_text_with_attributes(ocr_path)
+            # Process PDF without OCR first
+            pages_data = PDFHandler.extract_text_with_attributes(filepath)
             
+            # Only use OCR if no text was extracted
+            if not any(pages_data):
+                ocr_path = OCRProcessor.process_pdf(filepath)
+                pages_data = PDFHandler.extract_text_with_attributes(ocr_path)
+            
+            # Format pages
+            formatted_pages = {
+                str(i): page for i, page in enumerate(pages_data) if page
+            }
+            
+            if not formatted_pages:
+                return jsonify({
+                    'status': 'error',
+                    'error': 'No text extracted from PDF'
+                }), 400
+                
             return jsonify({
                 'status': 'success',
                 'filename': filename,
-                'pages': pages_data
+                'pages': formatted_pages
             })
             
         except Exception as e:
+            print(f"Upload error: {str(e)}")
             return jsonify({
                 'status': 'error',
                 'error': str(e)

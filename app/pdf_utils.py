@@ -10,20 +10,36 @@ class PDFHandler:
         
         for page in doc:
             blocks = []
-            for block in page.get_text("dict")["blocks"]:
+            text_page = page.get_text("dict")
+            
+            for block in text_page["blocks"]:
                 if "lines" in block:
                     for line in block["lines"]:
+                        # Combine spans in the same line
+                        line_text = ""
+                        first_span = line["spans"][0]
+                        line_bbox = list(first_span['bbox'])
+                        
+                        # Collect all text and extend bbox if needed
                         for span in line["spans"]:
+                            line_text += span['text']
+                            line_bbox[2] = max(line_bbox[2], span['bbox'][2])
+                            line_bbox[3] = max(line_bbox[3], span['bbox'][3])
+                        
+                        # Only add non-empty lines
+                        if line_text.strip():
                             blocks.append({
-                                'text': span['text'],
-                                'bbox': span['bbox'],
-                                'font': span['font'],
-                                'size': span['size'],
-                                'flags': span['flags'],
-                                'color': span['color']
+                                'text': line_text,
+                                'bbox': line_bbox,
+                                'font': first_span['font'],
+                                'size': first_span['size'],
+                                'flags': first_span['flags'],
+                                'color': first_span['color']
                             })
+            
             pages_data.append(blocks)
         
+        doc.close()  # Close the document to free resources
         return pages_data
 
     @staticmethod
@@ -78,25 +94,25 @@ class PDFHandler:
                     change['size']
                 )
                 
-                # Calculate precise white rectangle dimensions
+                # Calculate precise white rectangle dimensions with adjusted position
                 text_height = change['size'] * 1
                 y_middle = (y0 + y1) / 2
-                rect_y0 = y_middle - (text_height / 2) + 0.5
-                rect_y1 = y_middle + (text_height / 2) + 0.5
+                rect_y0 = y_middle - (text_height / 2) + 0.5 - 1  # Move up 1 pixel
+                rect_y1 = y_middle + (text_height / 2) + 0.5 - 1  # Move up 1 pixel
                 
-                # Increase right offset for both rectangle and text
-                x_offset = 1.0  # Increased from 0.2 to 1.0
+                # Adjust x position (move left 1 pixel)
+                x_offset = -1  # Reduced from 1.0 to 0.0 to move left
                 rect_x0 = x0 + x_offset
-                rect_x1 = rect_x0 + text_width - (x_offset * 0.4)  # Reduced compensation
+                rect_x1 = rect_x0 + text_width
                 
                 # Create precise white rectangle
                 page.draw_rect([rect_x0, rect_y0, rect_x1, rect_y1], 
                              color=(1, 1, 1), 
                              fill=(1, 1, 1))
                 
-                # Position text at same offset
+                # Position text with same adjustments
                 text_x = rect_x0
-                text_y = y1 - (change['size'] * 0.1)
+                text_y = y1 - (change['size'] * 0.1) - 0.5  # Move up 1 pixel
                 
                 try:
                     # Insert text with preserved color

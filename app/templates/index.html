@@ -164,47 +164,46 @@ document.getElementById('uploadForm').onsubmit = async (e) => {
             body: formData
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('Upload response:', data);  // Debug logging
+        
         const editContainer = document.getElementById('editContainer');
         
-        if (data.status === 'success' || data.status === 'warning') {
+        if (data.status === 'success') {
             // Set new expiry time
             const expiryTime = setExpiryTime();
             startCountdown(expiryTime);
             
-            // Show message if any
-            let messageHtml = '';
-            if (data.message) {
-                messageHtml = `
-                    <div class="alert alert-${data.status === 'success' ? 'success' : 'warning'} alert-dismissible fade show">
-                        ${data.message}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                `;
+            // Verify page data structure
+            if (!data.pages || typeof data.pages !== 'object') {
+                throw new Error('Invalid page data format');
             }
             
             // Create editor HTML
             const editorHtml = `
-                ${messageHtml}
                 <form id="editForm" data-filename="${data.filename}">
-                    ${Object.entries(data.pages).map(([pageNum, blocks], pageIndex) => `
+                    ${Object.entries(data.pages).map(([pageNum, blocks]) => `
                         <div class="card mb-4">
                             <div class="card-header">
                                 Page ${parseInt(pageNum) + 1}
                             </div>
                             <div class="card-body">
-                                ${blocks.map((block, blockIndex) => `
+                                ${Array.isArray(blocks) ? blocks.map((block, blockIndex) => `
                                     <div class="mb-3 text-block" data-page="${pageNum}" data-index="${blockIndex}">
                                         <input type="text"
                                             class="form-control"
-                                            value="${block.text}"
-                                            data-original="${block.text}"
+                                            value="${block.text || ''}"
+                                            data-original="${block.text || ''}"
                                             data-bbox='${JSON.stringify(block.bbox)}'
                                             data-font="${block.font}"
                                             data-size="${block.size}"
                                             data-color='${JSON.stringify(block.color)}'>
                                     </div>
-                                `).join('')}
+                                `).join('') : ''}
                             </div>
                         </div>
                     `).join('')}
@@ -232,6 +231,7 @@ document.getElementById('uploadForm').onsubmit = async (e) => {
             throw new Error(data.error || 'Unknown error occurred');
         }
     } catch (error) {
+        console.error('Upload error:', error);
         alert('Error: ' + error.message);
     }
 };
