@@ -61,19 +61,20 @@ class FileCleanup:
 
     @classmethod
     def force_cleanup(cls):
-        """Force cleanup while respecting active sessions"""
-        now = datetime.now()
+        """Force immediate cleanup of all files"""
         upload_dir = Config.UPLOAD_FOLDER
         
         if not os.path.exists(upload_dir):
             return
             
+        # Clear all active sessions
+        cls._active_sessions.clear()
+        
+        # Immediately remove all files
         for filename in os.listdir(upload_dir):
-            # Don't delete files that have active sessions
-            if filename not in cls._active_sessions:
-                try:
-                    filepath = os.path.join(upload_dir, filename)
-                    os.remove(filepath)
-                    print(f"\nForce removed inactive file: {filename}")
-                except Exception as e:
-                    print(f"\nError removing file {filename}: {str(e)}")
+            try:
+                filepath = os.path.join(upload_dir, filename)
+                os.remove(filepath)
+                print(f"\nForce removed: {filename}")
+            except Exception as e:
+                print(f"\nError removing file {filename}: {str(e)}")
