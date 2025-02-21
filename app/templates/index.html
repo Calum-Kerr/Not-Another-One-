@@ -88,6 +88,61 @@
     font-weight: bold;
     font-family: monospace;
 }
+
+/* Add mobile-specific styles */
+@media (max-width: 768px) {
+    .bullet-point-warning, .countdown-warning {
+        position: static;
+        max-width: 100%;
+        margin: 10px 0;
+    }
+    
+    .text-block input {
+        font-size: 16px; /* Prevent iOS zoom on input focus */
+        max-width: 100%;
+    }
+    
+    .input-group {
+        flex-wrap: wrap;
+    }
+    
+    .bottom-toolbar {
+        padding: 0.5rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .col-md-8 {
+        padding: 0 10px;
+    }
+    
+    .card-body {
+        padding: 0.75rem;
+    }
+    
+    /* Improve touch targets */
+    .btn {
+        padding: 0.5rem 1rem;
+        min-height: 44px;
+    }
+    
+    /* Adjust spacing for mobile */
+    .content-wrapper {
+        padding-bottom: 100px;
+        margin-bottom: 20px;
+    }
+}
+
+/* Fix input zooming on mobile */
+@media screen and (-webkit-min-device-pixel-ratio:0) { 
+    select,
+    textarea,
+    input {
+        font-size: 16px !important;
+    }
+}
 </style>
 
 <script>
@@ -185,7 +240,7 @@ document.getElementById('uploadForm').onsubmit = async (e) => {
             
             // Create editor HTML
             const editorHtml = `
-                <form id="editForm" data-filename="${data.filename}">
+                <form id="editForm" data-filename="${data.filename}" class="${isMobile() ? 'mobile-form' : ''}">
                     ${Object.entries(data.pages).map(([pageNum, blocks]) => `
                         <div class="card mb-4">
                             <div class="card-header">
@@ -326,6 +381,11 @@ document.addEventListener('visibilitychange', () => {
         }
     }
 });
+
+// Add mobile detection
+function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
 </script>
 
 <!-- Add Font Awesome for icons -->
