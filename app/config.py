@@ -2,8 +2,6 @@ import os
 from datetime import timedelta
 
 class Config:
-    # Use Heroku's environment variables if available
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-please-change'
     
     # Use temporary directory on Heroku
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(os.getcwd(), 'uploads')
