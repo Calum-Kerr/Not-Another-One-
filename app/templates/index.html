@@ -349,12 +349,26 @@ function attachFormHandlers() {
                 const page = input.parentElement.dataset.page;
                 if (!changes[page]) changes[page] = [];
                 
+                // Get the original color
+                const originalColor = JSON.parse(input.dataset.color);
+                const isColored = originalColor && (originalColor[0] > 0 || originalColor[1] > 0 || originalColor[2] > 0);
+                const isLink = /^https?:\/\/|@/.test(input.value);
+                
+                // Add visual feedback for special text
+                if (isColored) {
+                    input.style.color = `rgb(${originalColor.join(',')})`;
+                }
+                if (isLink) {
+                    input.style.textDecoration = 'underline';
+                    input.style.color = 'blue';
+                }
+                
                 changes[page].push({
                     bbox: JSON.parse(input.dataset.bbox.replace(/'/g, '"')),
                     new_text: input.value,
                     font: input.dataset.font,
                     size: parseFloat(input.dataset.size),
-                    color: JSON.parse(input.dataset.color.replace(/'/g, '"'))
+                    color: originalColor
                 });
             }
         });

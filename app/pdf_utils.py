@@ -1,7 +1,54 @@
 import fitz
 from app.font_utils import get_fallback_font, preserve_text_attributes
+from .text_color_handler import ColorHandler
+from .link_handler import LinkHandler
 
 class PDFHandler:
+    # Built-in font mappings
+    FONTS = {
+        'normal': 'Helvetica',
+        'bold': 'Helvetica-Bold',
+        'italic': 'Helvetica-Oblique',
+        'bold-italic': 'Helvetica-BoldOblique',
+        'times': 'Times-Roman',
+        'times-bold': 'Times-Bold',
+        'times-italic': 'Times-Italic',
+        'courier': 'Courier',
+        'courier-bold': 'Courier-Bold',
+        'courier-italic': 'Courier-Oblique'
+    }
+
+    @staticmethod
+    def get_font_name(font_attributes):
+        """Get built-in font name based on attributes"""
+        is_bold = 'Bold' in font_attributes
+        is_italic = 'Italic' in font_attributes or 'Oblique' in font_attributes
+        is_times = 'Times' in font_attributes
+        is_courier = 'Courier' in font_attributes
+
+        if is_times:
+            if is_bold and is_italic:
+                return 'Times-BoldItalic'
+            elif is_bold:
+                return 'Times-Bold'
+            elif is_italic:
+                return 'Times-Italic'
+            return 'Times-Roman'
+        elif is_courier:
+            if is_bold:
+                return 'Courier-Bold'
+            elif is_italic:
+                return 'Courier-Oblique'
+            return 'Courier'
+        else:  # Default to Helvetica
+            if is_bold and is_italic:
+                return 'Helvetica-BoldOblique'
+            elif is_bold:
+                return 'Helvetica-Bold'
+            elif is_italic:
+                return 'Helvetica-Oblique'
+            return 'Helvetica'
+
     @staticmethod
     def extract_text_with_attributes(pdf_path):
         """Extract text and its attributes from PDF"""
@@ -79,70 +126,34 @@ class PDFHandler:
             page = doc[int(page_num)]
             
             for change in page_changes:
-                x0, y0, x1, y1 = change['bbox']
-                
-                # Calculate font and style
-                font = 'helv'
-                if 'Times' in change['font']:
-                    font = 'tiro'
-                elif 'Courier' in change['font']:
-                    font = 'cour'
-                
-                if 'Bold' in change['font'] or (change.get('flags', 0) & 2**1):
-                    font = f"{font},bold"
-                if 'Italic' in change['font'] or (change.get('flags', 0) & 2**0):
-                    font = f"{font},italic"
-                
-                # Get exact text width
-                text_width = PDFHandler.get_text_width(
-                    change['new_text'],
-                    font,
-                    change['size']
-                )
-                
-                # Calculate dimensions
-                text_height = change['size'] * 1
-                y_middle = (y0 + y1) / 2
-                rect_y0 = y_middle - (text_height / 2) + 1
-                rect_y1 = y_middle + (text_height / 2) + 1
-                
-                x_offset = -0.5
-                rect_x0 = x0 + x_offset
-                rect_x1 = rect_x0 + text_width
-                
-                # Draw white background
-                page.draw_rect([rect_x0, rect_y0, rect_x1, rect_y1], 
-                             color=(1, 1, 1), 
-                             fill=(1, 1, 1))
-                
-                # Get original color from the span
-                original_color = change.get('color', [0, 0, 0])
-                if isinstance(original_color, (list, tuple)) and len(original_color) >= 3:
-                    color = PDFHandler.normalize_color(original_color)
+                if LinkHandler.is_link_text(change['new_text']):
+                    LinkHandler.apply_link_to_text(
+                        doc, int(page_num), change['new_text'], 
+                        change['bbox'], change.get('color')
+                    )
                 else:
-                    color = (0, 0, 0)  # Default to black
-                
-                # Draw text with original color
-                text_x = rect_x0
-                text_y = y1 - (change['size'] * 0.1) + 0
-                
-                page.insert_text(
-                    point=(text_x, text_y),
-                    text=change['new_text'],
-                    fontname=font,
-                    fontsize=change['size'],
-                    color=color
-                )
-                
-                # Handle links (blue text)
-                r, g, b = original_color[:3]
-                if r == 0 and g == 0 and b > 0:  # Blue text
-                    underline_y = rect_y1 - 0.5
-                    page.draw_line(
-                        (rect_x0, underline_y),
-                        (rect_x1, underline_y),
-                        color=color,
-                        width=0.5
+                    x0, y0, x1, y1 = change['bbox']
+                    
+                    # Get proper built-in font
+                    font_name = PDFHandler.get_font_name(change.get('font', 'Helvetica'))
+                    
+                    # White out original text
+                    page.draw_rect([x0, y0, x1, y1], 
+                                 color=(1, 1, 1), 
+                                 fill=(1, 1, 1))
+                    
+                    # Adjust position - move bold text down by 1
+                    x_offset = 1 if 'Bold' in font_name else 0
+                    y_offset = 3 if 'Bold' in font_name else 3  # Same y-offset for both now
+                    
+                    # Insert new text with proper font and adjusted position
+                    color = PDFHandler.normalize_color(change.get('color', [0, 0, 0]))
+                    page.insert_text(
+                        point=(x0 + x_offset, y1 - y_offset),
+                        text=change['new_text'],
+                        fontname=font_name,
+                        fontsize=change['size'],
+                        color=color
                     )
         
         return doc
