@@ -2,8 +2,14 @@
 
 {% block content %}
 <div class="bullet-point-warning">
-    <div class="alert alert-warning mb-0">
+    <div class="alert alert-warning mb-2">
         <strong>⚠️ Note:</strong> Avoid editing bullet point (•) lines
+    </div>
+    <div class="alert alert-warning mb-2">
+        <strong>⚠️ Note:</strong> Colored text editing is temporarily disabled
+    </div>
+    <div class="alert alert-warning mb-2">
+        <strong>⚠️ Note:</strong> Links and email addresses cannot be edited currently
     </div>
 </div>
 
@@ -141,6 +147,36 @@
     textarea,
     input {
         font-size: 16px !important;
+    }
+}
+
+/* Update warning styles for stacked alerts */
+.bullet-point-warning {
+    position: fixed;
+    top: 70px;
+    left: 20px;
+    max-width: 300px;
+    z-index: 1000;
+}
+
+.bullet-point-warning .alert {
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+    border-left: 4px solid #ffc107;
+    background-color: rgba(255, 243, 205, 0.95);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Mobile adjustment for stacked warnings */
+@media (max-width: 768px) {
+    .bullet-point-warning {
+        position: static;
+        max-width: 100%;
+        margin: 10px 0;
+    }
+    
+    .bullet-point-warning .alert {
+        margin-bottom: 0.5rem !important;
     }
 }
 </style>
