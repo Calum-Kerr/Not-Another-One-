@@ -108,32 +108,15 @@ def edit_pdf():
 
 @bp.route('/download/<filename>')
 def download_file(filename):
-    """Single download route that handles both normal and marked files"""
+    """Basic file download"""
     try:
         filepath = os.path.join(Config.UPLOAD_FOLDER, secure_filename(filename))
-        
-        # Check if the regular file exists
         if os.path.exists(filepath):
-            # Update session timer when file is downloaded
-            FileCleanup.start_countdown_thread(2, filename)
-            return send_file(
-                filepath,
-                as_attachment=True,
-                download_name=filename
-            )
-            
-        # Check if a marked version exists
-        marked_filepath = f"{filepath}.marked"
-        if os.path.exists(marked_filepath):
-            return send_file(
-                marked_filepath,
-                as_attachment=True,
-                download_name=filename
-            )
-            
-        return jsonify({'error': 'File not found'}), 404
+            return send_file(filepath)
+        return "File not found", 404
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Download error: {e}")
+        return str(e), 500
 
 @bp.route('/cleanup', methods=['POST'])
 def trigger_cleanup():

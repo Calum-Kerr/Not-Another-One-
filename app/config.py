@@ -2,9 +2,15 @@ import os
 from datetime import timedelta
 
 class Config:
+    # Use Heroku's environment variables if available
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-please-change'
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    
+    # Use temporary directory on Heroku
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(os.getcwd(), 'uploads')
+    
+    # Adjust file size limit based on your Heroku plan
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_FILE_SIZE', 16 * 1024 * 1024))
+    
     ALLOWED_EXTENSIONS = {'pdf'}
     
     # Standard PDF fonts available
@@ -23,3 +29,17 @@ class Config:
     FINAL_CLEANUP_DELAY = timedelta(minutes=2)  # Additional 2 minutes before complete cleanup
     CLEANUP_INTERVAL = timedelta(minutes=1)  # Check every minute
     LAST_CLEANUP_TIME = None
+
+    @staticmethod
+    def init_app(app):
+        # Create upload directory if it doesn't exist
+        os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+        
+        # Clear any existing files in upload directory
+        for filename in os.listdir(Config.UPLOAD_FOLDER):
+            file_path = os.path.join(Config.UPLOAD_FOLDER, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(f'Error: {e}')

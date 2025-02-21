@@ -302,17 +302,13 @@ function attachFormHandlers() {
     };
     
     downloadBtn.onclick = () => {
-        if (window.editedFile) {
-            // Create download form and submit it
-            const form = document.createElement('form');
-            form.method = 'GET';
-            form.action = `/download/${window.editedFile}`;
-            document.body.appendChild(form);
-            form.submit();
-            document.body.removeChild(form);
-        } else {
+        if (!window.editedFile) {
             alert('Please save changes first');
+            return;
         }
+        
+        // Simple direct link navigation
+        window.location.href = '/download/' + window.editedFile;
     };
 }
 
@@ -331,4 +327,7 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 </script>
+
+<!-- Add Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 {% endblock %}

@@ -2,3 +2,7 @@ Flask==3.1.0
 PyMuPDF==1.25.3
 ocrmypdf==16.9.0
 python-dotenv==1.0.1
+gunicorn==21.2.0
+# Add Heroku required packages
+whitenoise==6.6.0
+psycopg2-binary==2.9.9

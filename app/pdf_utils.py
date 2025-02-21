@@ -10,44 +10,50 @@ class PDFHandler:
         
         for page in doc:
             blocks = []
-            text_page = page.get_text("dict")
+            text_page = page.get_text("dict")  # Use dict instead of rawdict
             
             for block in text_page["blocks"]:
                 if "lines" in block:
                     for line in block["lines"]:
-                        # Combine spans in the same line
-                        line_text = ""
-                        first_span = line["spans"][0]
-                        line_bbox = list(first_span['bbox'])
-                        
-                        # Collect all text and extend bbox if needed
                         for span in line["spans"]:
-                            line_text += span['text']
-                            line_bbox[2] = max(line_bbox[2], span['bbox'][2])
-                            line_bbox[3] = max(line_bbox[3], span['bbox'][3])
-                        
-                        # Only add non-empty lines
-                        if line_text.strip():
+                            if 'text' not in span:
+                                continue
+                                
+                            # Ensure proper color format
+                            color = span.get('color', 0)
+                            if isinstance(color, int):
+                                color = [0, 0, 0]
+                            elif isinstance(color, (list, tuple)):
+                                color = list(color[:3])
+                            else:
+                                color = [0, 0, 0]
+
                             blocks.append({
-                                'text': line_text,
-                                'bbox': line_bbox,
-                                'font': first_span['font'],
-                                'size': first_span['size'],
-                                'flags': first_span['flags'],
-                                'color': first_span['color']
+                                'text': span['text'].strip(),
+                                'bbox': span['bbox'],
+                                'font': span.get('font', 'helv'),
+                                'size': span.get('size', 12),
+                                'flags': span.get('flags', 0),
+                                'color': color
                             })
             
-            pages_data.append(blocks)
+            # Only add pages with content
+            if blocks:
+                pages_data.append(blocks)
         
-        doc.close()  # Close the document to free resources
+        doc.close()
         return pages_data
 
     @staticmethod
     def normalize_color(color):
         """Convert color values to range 0-1"""
-        if not color or not isinstance(color, (list, tuple)):
-            return (0, 0, 0)
-        return tuple(max(0, min(1, c/255)) if c > 1 else c for c in color[:3])
+        try:
+            if isinstance(color, (list, tuple)) and len(color) >= 3:
+                # Convert integer RGB (0-255) to float (0-1)
+                return tuple(float(c) / 255 if c > 1 else float(c) for c in color[:3])
+            return (0, 0, 0)  # Default black
+        except:
+            return (0, 0, 0)  # Fallback to black on error
 
     @staticmethod
     def get_text_width(text, font_name, font_size):
@@ -94,52 +100,49 @@ class PDFHandler:
                     change['size']
                 )
                 
-                # Calculate precise white rectangle dimensions with adjusted position
+                # Calculate dimensions
                 text_height = change['size'] * 1
                 y_middle = (y0 + y1) / 2
-                rect_y0 = y_middle - (text_height / 2) + 1  # Move down 0.5 pixel
-                rect_y1 = y_middle + (text_height / 2) + 1  # Move down 0.5 pixel
+                rect_y0 = y_middle - (text_height / 2) + 1
+                rect_y1 = y_middle + (text_height / 2) + 1
                 
-                # Adjust x position (move right 0.5 pixel)
-                x_offset = -0.5  # Changed from -1 to -0.5 to move right
+                x_offset = -0.5
                 rect_x0 = x0 + x_offset
                 rect_x1 = rect_x0 + text_width
                 
-                # Create precise white rectangle
+                # Draw white background
                 page.draw_rect([rect_x0, rect_y0, rect_x1, rect_y1], 
                              color=(1, 1, 1), 
                              fill=(1, 1, 1))
                 
-                # Position text with same adjustments
-                text_x = rect_x0
-                text_y = y1 - (change['size'] * 0.1) + 0  # Adjust for new position
+                # Get original color from the span
+                original_color = change.get('color', [0, 0, 0])
+                if isinstance(original_color, (list, tuple)) and len(original_color) >= 3:
+                    color = PDFHandler.normalize_color(original_color)
+                else:
+                    color = (0, 0, 0)  # Default to black
                 
-                try:
-                    # Insert text with preserved color
-                    color = PDFHandler.normalize_color(change.get('color', (0, 0, 0)))
-                    
-                    # Draw text
-                    page.insert_text(
-                        point=(text_x, text_y),
-                        text=change['new_text'],
-                        fontname=font,
-                        fontsize=change['size'],
-                        color=color
+                # Draw text with original color
+                text_x = rect_x0
+                text_y = y1 - (change['size'] * 0.1) + 0
+                
+                page.insert_text(
+                    point=(text_x, text_y),
+                    text=change['new_text'],
+                    fontname=font,
+                    fontsize=change['size'],
+                    color=color
+                )
+                
+                # Handle links (blue text)
+                r, g, b = original_color[:3]
+                if r == 0 and g == 0 and b > 0:  # Blue text
+                    underline_y = rect_y1 - 0.5
+                    page.draw_line(
+                        (rect_x0, underline_y),
+                        (rect_x1, underline_y),
+                        color=color,
+                        width=0.5
                     )
-                    
-                    # Draw underline for links if needed
-                    if isinstance(change.get('color'), (list, tuple)) and len(change['color']) >= 3:
-                        if change['color'][0] == 0 and change['color'][1] == 0 and change['color'][2] > 0:
-                            underline_y = rect_y1 - 0.5
-                            page.draw_line(
-                                (rect_x0, underline_y),
-                                (rect_x1, underline_y),
-                                color=color,
-                                width=0.5
-                            )
-                    
-                except Exception as e:
-                    print(f"Text insertion error: {str(e)}, using fallback method")
-                    # Fallback handling...
-                    
+        
         return doc
